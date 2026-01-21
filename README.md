@@ -186,6 +186,7 @@ Tiny-Recursive-Models-For-Robotics/
 - **Sara Lazzaroni**
 - **Riccardo Bastiani**
 
+
 ---
 
 ## 📄 License
