@@ -114,7 +114,7 @@ mv LIBERO/libero/datasets/* dataset/
 
 ### 📓 Run the Notebook
 
-Open and run the Jupyter notebook:
+Open and run the notebook:
 
 ```bash
 jupyter notebook trm_on_libero.ipynb
