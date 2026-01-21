@@ -1,0 +1,79 @@
+\documentclass[10pt,journal,compsoc]{IEEEtran}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{titlesec}
+\usepackage{cite}
+\usepackage{caption}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{subcaption}
+
+\usepackage[x11names]{xcolor} % Per il supporto ai colori
+\usepackage{hyperref} % Per i link
+
+\hypersetup{
+    colorlinks=true,    % Abilita il colore del testo per i link
+    linkcolor=RoyalBlue4,  % Colore dei link a figure, tabelle, e riferimenti incrociati
+    citecolor=RoyalBlue4,  % Colore delle citazioni bibliografiche
+    filecolor=RoyalBlue4,  % Colore dei link ai file
+    urlcolor=RoyalBlue4    % Colore dei link URL
+}
+
+
+% Title and author
+\title{\huge Applying TinyRecursiveModels to Robotics}
+\author{Riccardo Bastiani, Francesco D'Aprile, Sara Lazzaroni}
+
+% Section Formatting
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+Robotic manipulation tasks require models that can efficiently learn complex behaviors from limited demonstrations through behavioral cloning. Current state-of-the-art vision-language-action (VLA) models like pi0 and OpenVLA achieve impressive performance but suffer from poor sample efficiency due to their massive parameter counts. This work investigates the adaptation of TinyRecursiveModels (TRM), a lightweight architecture that implements recursive reasoning through iterative processing, to robotic manipulation tasks. We evaluate TRM on the LIBERO-Spatial benchmark, focusing on pick-and-place manipulation tasks. Our approach demonstrates that TRM's recursive reasoning can achieve good performance with significantly improved sample efficiency compared to large-scale VLA models, making it particularly suitable for real-world deployment where data collection is expensive and computational resources are constrained.
+
+\section{Introduction}
+Recent vision-language-action (VLA) models have advanced robot learning through behavioral cloning, enabling complex manipulation tasks from expert demonstrations. However, large-scale models like Pi0 \cite{openpi2024} and OpenVLA \cite{kim24openvla} face deployment challenges due to computational requirements, making them prohibitive for real-world applications where data collection is expensive.
+
+Our key insight is that recursive reasoning provides a more efficient alternative to parameter scaling. TinyRecursiveModels (TRM) \cite{jolicoeurmartineau2025morerecursivereasoningtiny} achieve strong performance through iterative processing with compact architectures that match or exceed larger models across various domains. This motivates adapting TRM for robotic manipulation, where efficiency gains have significant practical impact.
+
+We present a systematic study of TinyRecursiveModels for robotic manipulation with two contributions: (1) adapting TRM for vision-language-action modeling, and (2) comprehensive evaluation on LIBERO demonstrating improved sample efficiency. 
+
+\section{Related Work}
+
+\textbf{Vision-Language-Action Models.} Recent advances in robotic learning have been driven by large-scale vision-language-action models that can process multimodal inputs and generate robotic actions. OpenVLA \cite{kim24openvla} represents a significant milestone, scaling transformer architectures to billions of parameters for robotic control. Similarly, pi0 \cite{openpi2024} and other large VLA models have demonstrated impressive zero-shot and few-shot capabilities across diverse manipulation tasks. However, these models require substantial computational resources and extensive training data, limiting their practical applicability in resource-constrained environments.
+
+\textbf{Recursive and Structured Models.} TinyRecursiveModels represent a new paradigm in deep learning, where recursive computation allows models to achieve strong performance with significantly fewer parameters. The core principle is that multiple processing steps with shared parameters can substitute for larger, monolithic architectures. While this approach has shown promise in logical reasoning tasks such as maze solving and Sudoku puzzles, its application to embodied AI and robotic control remains unexplored, motivating our investigation.
+
+\section{Dataset}
+We evaluate our approach using LIBERO \cite{liu2023libero}, a benchmark for robotic manipulation generalization consisting of four suites: LIBERO-Spatial (10 tasks), LIBERO-Object (10 tasks), LIBERO-Goal (10 tasks), and LIBERO-100 (100 tasks), testing spatial reasoning, object generalization, semantic understanding, and multi-step manipulation respectively.
+
+We focus on LIBERO-Spatial containing 10 pick-and-place tasks with a black bowl. Each task includes ~50 demonstration trajectories with multimodal observations: RGB images (workspace and wrist cameras), proprioceptive information, natural language specifications, and PDDL scene descriptions \cite{project_videos}. We use an 80/20 train-test split ensuring all 10 tasks are represented in both sets. Data augmentation (brightness variation, random cropping) improves robustness and maintains consistency with established robotic learning practices.
+
+\section{Proposed Method}
+
+Our approach adapts TinyRecursiveModels for robotic manipulation by designing a compact vision-language-action architecture with only 256-dimensional hidden representations that leverages recursive reasoning instead of parameter scaling. The core insight is that iterative processing with shared parameters can achieve strong performance while maintaining computational efficiency, requiring significantly fewer parameters than billion-parameter VLA models. Our TRMPolicy architecture consists of four main components: a visual encoder (ResNet18 + projection layer), a text encoder (CLIP), a recursive reasoning module (16 RecursiveBlocks), and an action prediction head.
+
+The multimodal encoding stage processes RGB observations (128×128×3) and natural language task descriptions through specialized encoders. The visual encoder employs a ResNet18 backbone with ImageNet1K-V1 pretrained weights, where all layers except the final classification head are fine-tuned on robotic manipulation data. The 512-dimensional CNN features are processed through an adaptive projection module consisting of Linear(512→512)-GELU-Dropout layers, followed by a final Linear(512→512) layer that produces enhanced 512-dimensional visual features (double the standard 256-dimensional hidden size for increased representation capacity). Task descriptions are encoded using the frozen CLIP-ViT-Large text encoder, which tokenizes input prompts (max 77 tokens) and produces 768-dimensional semantic embeddings via its pooler output. These embeddings are then projected to 256 dimensions through a LayerNorm-Linear-GELU-Dropout sequence. The visual (512-dim) and textual (256-dim) modalities are fused through simple concatenation, producing a 768-dimensional conditioning signal that is then mapped to 256 dimensions by the fusion adapter before entering the recursive reasoning module.
+
+The recursive reasoning module forms the heart of our architecture, implementing iterative refinement through a shared RecursiveBlock applied 16 times. Each RecursiveBlock consists of three core components: a Layer Normalization layer, a two-layer feedforward MLP that expands the 256-dimensional hidden state to 1024 dimensions through a Linear-GELU-Dropout-Linear-Dropout sequence, and a residual connection that adds the input hidden state to the MLP output. The block operates by taking the current hidden state and the multimodal conditioning signal as input, processing the hidden state through the normalized MLP transformation, and returning the refined representation. This computationally efficient design enables the model to iteratively refine its understanding of the manipulation task while using the same parameters across all 16 recursive steps, dramatically reducing the total parameter count compared to large-scale VLA models.
+
+The action prediction component takes the final refined hidden state from the recursive reasoning module and transforms it into executable robot actions. The action head consists of a Layer Normalization layer followed by a two-layer MLP with GELU activation and dropout regularization. This module maps the 256-dimensional hidden representation directly to the 7-dimensional robot action space, which typically includes 3D end-effector position, 3D orientation, and gripper state for manipulation tasks.
+
+For training, we employ behavioral cloning on LIBERO-Spatial demonstrations, optimizing a weighted combination of MSE and L1 losses (0.7 MSE + 0.3 L1) between predicted and expert actions. Action normalization using z-score statistics computed from the training data ensures stable convergence and prevents gradient explosion. We use the AdamW optimizer with gradient clipping and early stopping based on validation loss to prevent overfitting.
+
+\section{Experimental Results}
+
+\section{Conclusions and Future Work}
+
+\section{Roles}
+    
+\bibliographystyle{IEEEtran}
+\bibliography{refs} 
+    
+\end{document}
